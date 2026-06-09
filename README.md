@@ -35,12 +35,17 @@ the point.
 - [`docs/PROBLEMS.md`](docs/PROBLEMS.md) — the evidence base: sourced failure
   catalogue of OpenClaw, Hermes, and NanoClaw (every incident is an
   unverified-completion failure)
+- [`docs/PRESSURE-TEST.md`](docs/PRESSURE-TEST.md) — adversarial research:
+  kill risks, prior-art map, LLM-as-judge evidence, standards-history rules,
+  verdict and beachhead
 - [`docs/PLAN.md`](docs/PLAN.md) — the agent engine (durable memory, workspace
   hygiene, built-in guards), now scoped as the **reference implementation**:
   the first assistant that ships receipts, not "Done!"
 
 ## Status
 
-Spec drafting. An adversarial pressure-test of the idea (prior art,
-LLM-as-judge evidence, kill risks, beachhead) is in progress and will land as
-`docs/PRESSURE-TEST.md`.
+Pressure-test verdict: **build-with-changes** (changes folded into the spec).
+Beachhead: **the merge gate for agent-written PRs** — a GitHub Action +
+harness hook that hermetically re-runs tier-0 checks and attaches a signed
+receipt to the PR. Cross-model verification is the best-evidenced design
+choice in the space; the window is open and closing (~12 months).

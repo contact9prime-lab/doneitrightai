@@ -16,8 +16,13 @@ travel with the work.
 ## 1. The Contract
 
 Before work starts, the task gets a definition of done: the checks that would
-prove success. A contract is a small YAML file (or front-matter block) the
-requester writes — or the worker proposes and the requester approves.
+prove success. A contract is a small YAML file (or front-matter block).
+**Contracts are auto-drafted** — by a model *different from the worker* —
+from the task, issue, or message, then approved by the requester in one
+click. Hand-authoring is allowed, never required, and PoD ships contract
+templates per task type. (A standard that taxes every task with spec-writing
+dies the llms.txt death; a worker drafting its own contract is self-grading
+by another name.)
 
 ```yaml
 pod: "0.1"
@@ -44,11 +49,15 @@ invariants:
 **Check tiers** (the load-bearing idea — not all verification is equal, and
 the receipt must never blur the difference):
 
-| Tier | Kind | How it's decided | Trust level |
+| Tier | Kind | How it's decided | Receipt label |
 |---|---|---|---|
-| **0** | `run` | Code executes; exit code decides. Tests, diffs, schema checks, linters. | Provable |
-| **1** | `fact` | Verifier independently confirms the claim from evidence (files, APIs, logs) — never from the worker's say-so. | Confirmed |
-| **2** | `rubric` | Verifier scores 0–1 against the rubric, with stated confidence. | Judgment |
+| **0** | `run` | The **verifier re-executes** the command in a clean sandbox the worker never touched; exit code decides. Tests, diffs, schema checks, linters. Worker-reported results are never accepted — a gamed check certified by a receipt is worse than no receipt. | `verified` |
+| **1** | `fact` | Verifier independently confirms the claim from evidence (files, APIs, logs) — never from the worker's say-so. | `evidence-confirmed` |
+| **2** | `rubric` | Verifier scores 0–1 against the rubric, with stated confidence. A signed **opinion**, and the receipt says so. | `scored-opinion` |
+
+These labels appear verbatim on every check in the receipt. The trust
+gradient is the product: consumers always know whether a verdict was proven,
+confirmed, or judged.
 
 **Invariants** are facts that must remain true throughout the task (the
 "don't delete my emails" clause). They are tier-1 checks evaluated against
@@ -67,8 +76,9 @@ Any agent or program may verify, subject to five rules:
    bias; the receipt records worker and verifier models so consumers can
    judge.
 3. **Falsify first.** The verifier's stance is "prove this was NOT done."
-   It runs tier-0 checks as code, hunts for independent evidence on tier-1,
-   and scores tier-2 against the rubric only.
+   It re-executes tier-0 checks itself in a hermetic sandbox (never trusting
+   the worker's run), hunts for independent evidence on tier-1, and scores
+   tier-2 against the rubric only.
 4. **Every check gets a verdict:** `pass`, `fail`, or `unverifiable`. Silent
    skips are forbidden — `unverifiable` is an honest first-class answer.
 5. **No repair.** The verifier never fixes the work. Verification and
@@ -87,10 +97,10 @@ A signed JSON file, written next to the work, chained across delegations:
   "worker":   { "agent": "doneitright/0.1", "model": "claude-opus-4-8" },
   "verifier": { "agent": "pod-verify/0.1",  "model": "gpt-5.2" },
   "checks": [
-    { "id": "totals-match",    "tier": 0, "verdict": "pass", "evidence": "sha256:ab12…" },
-    { "id": "summary-sent",    "tier": 1, "verdict": "pass", "evidence": "sha256:cd34…" },
-    { "id": "nothing-deleted", "tier": 1, "verdict": "pass", "evidence": "sha256:ef56…" },
-    { "id": "summary-quality", "tier": 2, "verdict": "pass", "score": 0.92, "confidence": 0.85 }
+    { "id": "totals-match",    "tier": 0, "label": "verified",           "verdict": "pass", "evidence": "sha256:ab12…" },
+    { "id": "summary-sent",    "tier": 1, "label": "evidence-confirmed", "verdict": "pass", "evidence": "sha256:cd34…" },
+    { "id": "nothing-deleted", "tier": 1, "label": "evidence-confirmed", "verdict": "pass", "evidence": "sha256:ef56…" },
+    { "id": "summary-quality", "tier": 2, "label": "scored-opinion",     "verdict": "pass", "score": 0.92, "confidence": 0.85 }
   ],
   "invariants": "pass",
   "verdict": "done",
