@@ -1,44 +1,46 @@
 # doneitrightai
 
-**The agentic AI engine that doesn't forget and doesn't make a mess.**
+**Proof of Done — the missing trust layer of the agent stack.**
 
-Personal agentic assistants exploded in 2026 — OpenClaw (377k stars), Hermes
-(188k stars), NanoClaw (29k stars). Every one of them goofs up the same way:
-they **lose context over time** (compaction silently destroys instructions and
-days of work) and they **clutter the workspace** (piles of contradictory
-markdown memory files the agent retrieves but can't reason over). The fixes
-people bolt on make operating them even more complicated.
+LLMs gave AI a brain. MCP gave it hands. Skills gave it know-how. Agents made
+it a worker. Every layer of *capability* now exists — and every agent still
+grades its own homework. The deleted inboxes, the overwritten work, the flood
+of slop: all the same failure, an **unverified claim of completion**.
 
-doneitrightai takes the opposite bet: the moat is not more channels or more
-skills — it is **durable memory, an always-clean workspace, and radical
-operational simplicity**. Things should just happen, magically, without the
-operator babysitting config files.
+The human economy never delegates on trust alone — it runs on contracts,
+inspections, audits, and receipts. The agent economy has none of that.
+doneitrightai builds it:
 
-## The three promises
+> **MCP standardized how agents act.
+> Proof of Done standardizes how the world knows they did it right.**
 
-1. **Never loses the plot.** Compaction never drops standing instructions or
-   in-flight work. Memory is curated, consolidated in the background, and
-   auditable — plain files you can read and grep, not a black box.
-2. **Never makes a mess.** Every artifact the agent creates is filed
-   automatically. Scratch space has a TTL. A janitor pass keeps memory and
-   workspace contradiction-free. Week 50 looks as clean as day 1.
-3. **Never needs a manual.** One process, a handful of files, no config
-   sprawl. Secure by default (loopback bind, auth on, containers per agent
-   group). Hard budget limits so a runaway loop can't produce a $1,200 bill.
+## The standard, in one breath
 
-## How it's built
+1. **Contract** — before work starts, the task gets a small, machine-readable
+   definition of done (deterministic checks, facts to confirm, judgment
+   rubrics, and invariants like *"nothing gets deleted"*).
+2. **Verifier** — an independent, fresh-context agent (ideally a different
+   model) that never sees the worker's reasoning and tries to *falsify*
+   completion.
+3. **Receipt** — a signed, portable attestation of what was asked, what was
+   checked, and what was proven. Receipts chain across delegations, so proof
+   travels with the work.
 
-Fork of **NanoClaw** (MIT, ~4k lines, container-per-group isolation, SQLite
-IPC) running on the **Claude Agent SDK** (sessions, compaction, subagents,
-hooks, MCP). We keep that base almost untouched and build the differentiators
-on top. See the docs:
+Read the full draft: [`docs/SPEC.md`](docs/SPEC.md) — five minutes, that's
+the point.
 
-- [`docs/PROBLEMS.md`](docs/PROBLEMS.md) — the sourced failure catalogue of
-  OpenClaw, Hermes, and NanoClaw (what we are fixing, with receipts)
-- [`docs/PLAN.md`](docs/PLAN.md) — fork decision, architecture, compliance,
-  and roadmap
+## Repo map
+
+- [`docs/SPEC.md`](docs/SPEC.md) — Proof of Done v0.1 draft (the product)
+- [`docs/PROBLEMS.md`](docs/PROBLEMS.md) — the evidence base: sourced failure
+  catalogue of OpenClaw, Hermes, and NanoClaw (every incident is an
+  unverified-completion failure)
+- [`docs/PLAN.md`](docs/PLAN.md) — the agent engine (durable memory, workspace
+  hygiene, built-in guards), now scoped as the **reference implementation**:
+  the first assistant that ships receipts, not "Done!"
 
 ## Status
 
-Research and planning phase. The problem map and build plan are done; Phase 0
-(fork and strip) is next.
+Spec drafting. An adversarial pressure-test of the idea (prior art,
+LLM-as-judge evidence, kill risks, beachhead) is in progress and will land as
+`docs/PRESSURE-TEST.md`.
