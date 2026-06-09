@@ -1,0 +1,17 @@
+{
+  "servers": {
+    "fs": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/workspace"]
+    }
+  },
+  "rules": [
+    { "match": "move*", "tier": "hold" },
+    { "match": "write_scratch*", "tier": "pass" }
+  ],
+  "defaultTier": "undoable",
+  "commitWindowMs": 1800000,
+  "allowAgentCommit": false,
+  "maxSnapshotBytes": 52428800,
+  "dataDir": ".recoil"
+}
