@@ -1,0 +1,8 @@
+node_modules
+dist
+.recoil
+.git
+examples
+docs
+test
+*.log
