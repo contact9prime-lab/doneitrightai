@@ -3,6 +3,12 @@
     "fs": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/workspace"]
+    },
+    "gh": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..." },
+      "profile": "github"
     }
   },
   "rules": [

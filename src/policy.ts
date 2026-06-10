@@ -1,4 +1,5 @@
 import type { PolicyRule, RecoilConfig, Tier } from "./config.js";
+import { PROFILES } from "./profiles.js";
 
 /**
  * Built-in safety net, evaluated after user rules. Read-shaped tools pass,
@@ -13,7 +14,7 @@ export const BUILTIN_RULES: PolicyRule[] = [
   },
   {
     match:
-      "delete*|remove*|drop*|destroy*|truncate*|purge*|wipe*|send*|publish*|deploy*|release*|pay*|transfer*|charge*|refund*|cancel*|merge*|force*|reset*|revoke*|terminate*|kill*",
+      "delete*|remove*|drop*|destroy*|truncate*|purge*|wipe*|send*|publish*|deploy*|release*|pay*|transfer*|charge*|refund*|cancel*|merge*|force*|reset*|revoke*|terminate*|kill*|execute*|apply*",
     tier: "hold",
   },
 ];
@@ -32,10 +33,17 @@ function matches(rule: PolicyRule, server: string, tool: string): boolean {
   return patternToRegex(rule.match).test(tool);
 }
 
-/** First matching user rule wins, then built-ins, then the default tier. */
+/**
+ * Precedence: user rules, then the server's profile pack, then built-ins,
+ * then the default tier.
+ */
 export function classify(server: string, tool: string, config: RecoilConfig): Tier {
   for (const rule of config.rules) {
     if (matches(rule, server, tool)) return rule.tier;
+  }
+  const profile = config.servers[server]?.profile;
+  for (const rule of profile ? PROFILES[profile] ?? [] : []) {
+    if (matches({ ...rule, server: undefined }, server, tool)) return rule.tier;
   }
   for (const rule of BUILTIN_RULES) {
     if (matches(rule, server, tool)) return rule.tier;

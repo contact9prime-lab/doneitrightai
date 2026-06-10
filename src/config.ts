@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { PROFILE_NAMES, PROFILES } from "./profiles.js";
 
 export type Tier = "pass" | "undoable" | "hold";
 
@@ -7,6 +8,8 @@ export interface ServerSpec {
   command: string;
   args?: string[];
   env?: Record<string, string>;
+  /** Name of a built-in rule pack (see src/profiles.ts) applied to this server. */
+  profile?: string;
 }
 
 export interface PolicyRule {
@@ -40,6 +43,11 @@ export function loadConfig(path: string): RecoilConfig {
   const raw = JSON.parse(readFileSync(path, "utf8"));
   if (!raw.servers || Object.keys(raw.servers).length === 0) {
     throw new Error(`${path}: "servers" must list at least one downstream MCP server`);
+  }
+  for (const [name, spec] of Object.entries(raw.servers as Record<string, ServerSpec>)) {
+    if (spec.profile && !PROFILES[spec.profile]) {
+      throw new Error(`${path}: server "${name}" has unknown profile "${spec.profile}" (built-in: ${PROFILE_NAMES.join(", ")})`);
+    }
   }
   const tiers: Tier[] = ["pass", "undoable", "hold"];
   for (const rule of raw.rules ?? []) {

@@ -31,6 +31,31 @@ rules, then the default:
 | `undoable` | Snapshot what the call touches, forward, recoilable for the commit window (default 30 min), then finalized. | unknown tools, `write*`, `edit*` (default tier) |
 | `hold` | Do **not** forward. Stage until a human commits or discards. | `delete*`, `send*`, `pay*`, `deploy*`, `merge*`, `drop*`, `purge*` … |
 
+### Server profiles — multi-use-case coverage without rule-writing
+
+The generality model: **audit and hold need zero domain knowledge** (you can
+always undo what never ran), so any MCP server is protected the moment it
+sits behind Recoil. Only snapshot-undo is per-domain. Precision comes from
+**profiles** — curated rule packs referenced per server:
+
+```json
+{
+  "servers": {
+    "gh":   { "command": "...", "profile": "github" },
+    "db":   { "command": "...", "profile": "supabase" },
+    "chat": { "command": "...", "profile": "slack" }
+  }
+}
+```
+
+Built-in profiles: `github`, `supabase`, `postgres`, `slack`, `gmail`.
+Precedence: your rules → the server's profile → built-in safety net →
+default tier. The stance encoded in every profile: anything that changes
+state other people can see (a PR, a Slack message, a production row) is
+held; reads pass; loosen with a user rule where a hold is too strict. The
+built-in net also holds the database-wipe class (`execute*`, `apply*`)
+even with no profile set.
+
 Two honesty rules with teeth:
 
 - **If Recoil can't promise recovery, it doesn't pretend.** An undoable

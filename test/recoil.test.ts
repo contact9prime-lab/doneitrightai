@@ -44,6 +44,34 @@ describe("policy", () => {
     expect(classify("fs", "write_file", c)).toBe("undoable");
   });
 
+  it("holds the database-wipe class by default", () => {
+    const c = config();
+    expect(classify("db", "execute_sql", c)).toBe("hold");
+    expect(classify("db", "apply_migration", c)).toBe("hold");
+    expect(classify("infra", "deploy_edge_function", c)).toBe("hold");
+  });
+
+  it("applies server profiles between user rules and built-ins", () => {
+    const c = config({
+      servers: {
+        gh: { command: "x", profile: "github" },
+        db: { command: "x", profile: "supabase" },
+        chat: { command: "x", profile: "slack" },
+      },
+      rules: [{ match: "update_pull_request", server: "gh", tier: "pass" }],
+    });
+    // profile holds mutations that built-ins alone would miss
+    expect(classify("gh", "create_pull_request", c)).toBe("hold");
+    expect(classify("db", "insert_record", c)).toBe("hold");
+    expect(classify("chat", "post_message", c)).toBe("hold");
+    // profile reads pass
+    expect(classify("gh", "search_code", c)).toBe("pass");
+    // user rule overrides the profile
+    expect(classify("gh", "update_pull_request", c)).toBe("pass");
+    // profiles are scoped: other servers are untouched by them
+    expect(classify("fs", "create_directory", config())).toBe("undoable");
+  });
+
   it("user rules win over built-ins, and can be server-scoped", () => {
     const c = config({
       rules: [

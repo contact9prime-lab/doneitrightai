@@ -52,10 +52,20 @@ recoil commit <id>     # approve a held action
 recoil undo <id>       # recoil an applied action / discard a held one
 ```
 
-See it live (write → recoil, destructive move → held → human commit):
+Generality comes from the tier design — audit and hold need zero domain
+knowledge, so *any* MCP server is protected the moment it sits behind
+Recoil — plus **server profiles**, curated rule packs for popular servers
+(`github`, `supabase`, `postgres`, `slack`, `gmail`):
+
+```json
+"gh": { "command": "...", "profile": "github" }
+```
+
+See it live:
 
 ```bash
-node examples/demo.mjs
+node examples/demo.mjs        # write → recoil; destructive move → held → human commit
+node examples/demo-multi.mjs  # filesystem + memory server behind one ledger
 ```
 
 ## Docs
