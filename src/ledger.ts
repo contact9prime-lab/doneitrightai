@@ -24,11 +24,21 @@ export interface ActionRecord {
   status: ActionStatus;
   undo?: SnapshotManifest;
   note?: string;
+  /** Downstream result captured once the action runs (for status retrieval). */
+  result?: unknown;
+  /** Whether that result was already returned inline to a blocked tool call. */
+  delivered?: boolean;
+}
+
+interface TransitionExtra {
+  note?: string;
+  result?: unknown;
+  delivered?: boolean;
 }
 
 type Event =
   | ({ kind: "action" } & ActionRecord)
-  | { kind: "transition"; id: string; ts: string; status: ActionStatus; note?: string };
+  | ({ kind: "transition"; id: string; ts: string; status: ActionStatus } & TransitionExtra);
 
 /** Append-only JSONL ledger; state is reconstructed by replay. */
 export class Ledger {
@@ -44,8 +54,8 @@ export class Ledger {
     this.append({ kind: "action", ...action });
   }
 
-  transition(id: string, status: ActionStatus, note?: string): void {
-    this.append({ kind: "transition", id, ts: new Date().toISOString(), status, note });
+  transition(id: string, status: ActionStatus, extra: TransitionExtra = {}): void {
+    this.append({ kind: "transition", id, ts: new Date().toISOString(), status, ...extra });
   }
 
   all(): ActionRecord[] {
@@ -61,7 +71,9 @@ export class Ledger {
         const action = actions.get(event.id);
         if (action) {
           action.status = event.status;
-          if (event.note) action.note = event.note;
+          if (event.note !== undefined) action.note = event.note;
+          if (event.result !== undefined) action.result = event.result;
+          if (event.delivered !== undefined) action.delivered = event.delivered;
         }
       }
     }

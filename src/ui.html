@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recoil — agent action control</title>
+    <style>
+      :root {
+        --bg: #0b0e14;
+        --panel: #11161f;
+        --panel-2: #161c28;
+        --line: #232c3b;
+        --text: #e6edf3;
+        --muted: #8b97a7;
+        --accent: #5b8cff;
+        --hold: #f5a524;
+        --pass: #5b8cff;
+        --undo: #3fb6a8;
+        --good: #2ecc8f;
+        --bad: #ef5d6b;
+        --radius: 12px;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: radial-gradient(1200px 600px at 70% -10%, #16203200, #0b0e14), var(--bg);
+        color: var(--text);
+        font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      header {
+        position: sticky; top: 0; z-index: 5;
+        display: flex; align-items: center; gap: 16px;
+        padding: 16px 24px;
+        background: rgba(11, 14, 20, 0.82);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--line);
+      }
+      .brand { display: flex; align-items: center; gap: 11px; font-weight: 650; letter-spacing: 0.2px; }
+      .logo {
+        width: 26px; height: 26px; border-radius: 8px;
+        background: conic-gradient(from 210deg, var(--accent), var(--undo), var(--hold), var(--accent));
+        box-shadow: 0 0 0 1px #ffffff14 inset, 0 6px 18px #5b8cff33;
+        position: relative;
+      }
+      .logo::after {
+        content: ""; position: absolute; inset: 7px; border-radius: 50%;
+        border: 2.5px solid #0b0e14; border-right-color: transparent; transform: rotate(35deg);
+      }
+      .brand small { display: block; color: var(--muted); font-weight: 450; font-size: 11px; letter-spacing: 0.3px; }
+      .spacer { flex: 1; }
+      .stat { text-align: right; padding: 0 6px; }
+      .stat b { font-size: 18px; font-variant-numeric: tabular-nums; }
+      .stat span { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; }
+      .live { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 4px #2ecc8f22; }
+      .dot.off { background: var(--bad); box-shadow: 0 0 0 4px #ef5d6b22; }
+      main { max-width: 1080px; margin: 0 auto; padding: 28px 24px 80px; }
+      h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 30px 0 14px; }
+      h2:first-child { margin-top: 6px; }
+      .empty { color: var(--muted); padding: 18px; border: 1px dashed var(--line); border-radius: var(--radius); text-align: center; }
+      .card {
+        background: linear-gradient(180deg, var(--panel-2), var(--panel));
+        border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 16px 18px; margin-bottom: 12px;
+      }
+      .card.hold { border-color: #6a4d12; box-shadow: 0 0 0 1px #f5a52422, 0 10px 30px #00000040; }
+      .row { display: flex; align-items: center; gap: 12px; }
+      .tool { font-weight: 620; font-size: 15px; }
+      .srv { color: var(--muted); font-size: 12.5px; }
+      .pill { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; letter-spacing: 0.3px; text-transform: lowercase; }
+      .pill.tier-hold { background: #f5a52420; color: var(--hold); }
+      .pill.tier-pass { background: #5b8cff20; color: var(--pass); }
+      .pill.tier-undoable { background: #3fb6a820; color: var(--undo); }
+      .st { font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 6px; text-transform: lowercase; }
+      .st-held { background: #f5a52418; color: var(--hold); }
+      .st-applied, .st-committed { background: #3fb6a818; color: var(--undo); }
+      .st-passed { background: #5b8cff14; color: var(--pass); }
+      .st-recoiled, .st-discarded { background: #8b97a718; color: var(--muted); }
+      .st-failed { background: #ef5d6b18; color: var(--bad); }
+      .st-final { background: #ffffff0c; color: var(--muted); }
+      .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      .id { color: var(--muted); font-size: 12px; }
+      pre {
+        margin: 10px 0 0; padding: 11px 13px; background: #0a0d13; border: 1px solid var(--line);
+        border-radius: 9px; color: #c4cfdd; font-size: 12.5px; overflow: auto; max-height: 180px;
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      .btns { margin-left: auto; display: flex; gap: 9px; }
+      button {
+        font: inherit; font-weight: 600; font-size: 13px; cursor: pointer;
+        border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+        padding: 8px 16px; border-radius: 9px; transition: transform 0.06s ease, filter 0.15s ease;
+      }
+      button:hover { filter: brightness(1.15); }
+      button:active { transform: translateY(1px); }
+      button:disabled { opacity: 0.5; cursor: default; }
+      .approve { background: linear-gradient(180deg, #2ecc8f, #25a877); border-color: #2ecc8f55; color: #04140d; }
+      .discard { background: #ef5d6b18; border-color: #ef5d6b44; color: #ff9aa4; }
+      .recoil { background: #3fb6a818; border-color: #3fb6a844; color: #79e7da; }
+      table { width: 100%; border-collapse: collapse; }
+      th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; padding: 0 12px 10px; }
+      td { padding: 11px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+      tr:hover td { background: #ffffff05; }
+      .res { color: var(--muted); font-size: 12.5px; max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .toast {
+        position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px);
+        background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+        padding: 12px 18px; opacity: 0; transition: all 0.25s ease; box-shadow: 0 12px 40px #00000060; max-width: 80vw;
+      }
+      .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+      .toast.ok { border-color: #2ecc8f55; }
+      .toast.err { border-color: #ef5d6b55; }
+      .muted { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand"><div class="logo"></div><div>Recoil<small>agent action control</small></div></div>
+      <div class="spacer"></div>
+      <div class="stat"><b id="n-held">0</b><span>awaiting</span></div>
+      <div class="stat"><b id="n-recoilable">0</b><span>recoilable</span></div>
+      <div class="stat"><b id="n-total">0</b><span>actions</span></div>
+      <div class="live"><span class="dot" id="dot"></span><span id="live-text">live</span></div>
+    </header>
+    <main>
+      <h2>Awaiting your approval</h2>
+      <div id="held"></div>
+      <h2>Recoilable — undo within the window</h2>
+      <div id="recoilable"></div>
+      <h2>Audit ledger</h2>
+      <table>
+        <thead><tr><th>ID</th><th>Time</th><th>Action</th><th>Tier</th><th>Status</th><th>Result</th></tr></thead>
+        <tbody id="ledger"></tbody>
+      </table>
+    </main>
+    <div class="toast" id="toast"></div>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+      const fmtTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const pretty = (v) => { try { return JSON.stringify(v, null, 2); } catch { return String(v); } };
+
+      let busy = new Set();
+
+      function toast(msg, ok) {
+        const t = $("toast");
+        t.textContent = msg;
+        t.className = "toast show " + (ok ? "ok" : "err");
+        setTimeout(() => (t.className = "toast"), 3200);
+      }
+
+      async function act(op, id) {
+        if (busy.has(id)) return;
+        busy.add(id);
+        try {
+          const r = await fetch("/api/" + op, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ id }),
+          });
+          const data = await r.json();
+          toast(data.message || (op + " " + id), data.ok !== false);
+        } catch (e) {
+          toast("Failed: " + e, false);
+        } finally {
+          busy.delete(id);
+          load();
+        }
+      }
+
+      function heldCard(a) {
+        return `<div class="card hold">
+          <div class="row">
+            <span class="tool">${esc(a.tool)}</span>
+            <span class="srv mono">${esc(a.server)}</span>
+            <span class="pill tier-${a.tier}">${a.tier}</span>
+            <span class="id mono">${a.id}</span>
+            <div class="btns">
+              <button class="approve" onclick="act('commit','${a.id}')">Approve &amp; run</button>
+              <button class="discard" onclick="act('undo','${a.id}')">Discard</button>
+            </div>
+          </div>
+          ${a.args && Object.keys(a.args).length ? `<pre>${esc(pretty(a.args))}</pre>` : ""}
+        </div>`;
+      }
+
+      function recoilableCard(a) {
+        return `<div class="card">
+          <div class="row">
+            <span class="tool">${esc(a.tool)}</span>
+            <span class="srv mono">${esc(a.server)}</span>
+            <span class="st st-${a.status}">${a.status}</span>
+            <span class="id mono">${a.id}</span>
+            <div class="btns"><button class="recoil" onclick="act('undo','${a.id}')">Recoil</button></div>
+          </div>
+        </div>`;
+      }
+
+      function ledgerRow(a) {
+        return `<tr>
+          <td class="mono id">${a.id}</td>
+          <td class="muted">${fmtTime(a.ts)}</td>
+          <td><b>${esc(a.tool)}</b> <span class="srv mono">${esc(a.server)}</span></td>
+          <td><span class="pill tier-${a.tier}">${a.tier}</span></td>
+          <td><span class="st st-${a.status}">${a.status}</span></td>
+          <td class="res mono">${esc(a.result ?? a.note ?? "")}</td>
+        </tr>`;
+      }
+
+      async function load() {
+        try {
+          const data = await fetch("/api/ledger?limit=200").then((r) => r.json());
+          $("dot").className = "dot";
+          $("live-text").textContent = "live";
+          const held = data.filter((a) => a.actionable);
+          const recoilable = data.filter((a) => a.recoilable);
+          $("n-held").textContent = held.length;
+          $("n-recoilable").textContent = recoilable.length;
+          $("n-total").textContent = data.length;
+          $("held").innerHTML = held.length ? held.map(heldCard).join("") : `<div class="empty">Nothing waiting. The agent hasn't staged any consequential actions.</div>`;
+          $("recoilable").innerHTML = recoilable.length ? recoilable.map(recoilableCard).join("") : `<div class="empty">No actions in the recoil window.</div>`;
+          $("ledger").innerHTML = data.map(ledgerRow).join("");
+        } catch (e) {
+          $("dot").className = "dot off";
+          $("live-text").textContent = "disconnected";
+        }
+      }
+
+      load();
+      setInterval(load, 2000);
+    </script>
+  </body>
+</html>

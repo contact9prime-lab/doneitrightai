@@ -23,6 +23,13 @@ rare. Recoil makes them cheap.
 - **Universal coverage** — speaks MCP on both sides, so every existing agent
   (Claude Code, Claude Desktop, NanoClaw, any MCP host) and every existing
   MCP server works unchanged. Wrap one server or ten behind one ledger.
+- **Approval feeds back into the agent** — a held action's real result returns
+  through the same tool call once a human approves it (block mode), or via
+  `recoil_status` (async mode). The agent continues with the genuine outcome,
+  never a dangling "I asked the human."
+- **Professional web console** — a live, loopback-bound dashboard to approve,
+  discard, and recoil actions, with the full audit ledger. Zero external
+  dependencies.
 - **Three-tier policy** — every call is classified:
   | Tier | Behavior |
   |---|---|
@@ -119,7 +126,17 @@ them twice, or the agent gets an unguarded path).
 spawn Recoil; it exposes all downstream tools (name-collision-safe) plus
 three control tools: `recoil_ledger`, `recoil_undo`, `recoil_commit`.
 
-## The human console
+## The web console
+
+With `controlPort` set (default `7777`), open **http://127.0.0.1:7777** for a
+live dashboard: held actions surface at the top with **Approve & run** /
+**Discard**, recoilable actions get a **Recoil** button, and the full audit
+ledger streams below — refreshing every two seconds. Approving here runs the
+action and unblocks the waiting agent. Bound to loopback because approving an
+agent's destructive action is privileged; put your own auth in front before
+exposing it.
+
+## The human console (CLI)
 
 ```bash
 recoil ledger          # audit trail, newest first; held actions are flagged
@@ -148,6 +165,11 @@ isn't `./.recoil`.
 | `allowAgentCommit` | `false` | Whether the agent may approve its own held actions. Leave this off. |
 | `maxSnapshotBytes` | `52428800` | Snapshot budget; larger work escalates to hold. |
 | `dataDir` | `.recoil` | Ledger, snapshots, and command queue location. |
+| `holdMode` | `block` | `block`: held call waits and resolves to the real result on approval. `async`: returns a notice; agent retrieves the result via `recoil_status`. |
+| `holdTimeoutMs` | `0` | Block mode: fall back to the async notice after this long (`0` = wait indefinitely with progress keepalive). |
+| `holdProgressMs` | `10000` | Block mode: progress-notification interval while waiting. |
+| `controlPort` | `7777` | Web console port (`0` = off). |
+| `controlHost` | `127.0.0.1` | Console bind address. Use `0.0.0.0` only behind your own auth. |
 
 Precedence: **your rules → server profile → built-in safety net →
 `defaultTier`.** A hold too strict for your workflow is one `pass`/`undoable`

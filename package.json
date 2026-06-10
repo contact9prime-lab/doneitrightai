@@ -12,7 +12,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node -e \"require('fs').copyFileSync('src/ui.html','dist/ui.html')\"",
     "start": "node dist/index.js",
     "test": "vitest run"
   },

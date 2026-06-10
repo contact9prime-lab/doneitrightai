@@ -22,6 +22,9 @@ const config = (overrides: Partial<RecoilConfig> = {}): RecoilConfig => ({
   allowAgentCommit: false,
   maxSnapshotBytes: 1024 * 1024,
   dataDir: join(workDir, ".recoil"),
+  holdMode: "async",
+  holdTimeoutMs: 0,
+  holdProgressMs: 10_000,
   ...overrides,
 });
 
@@ -194,6 +197,75 @@ describe("end-to-end", () => {
     await core.pollCommands();
     expect(existsSync(file)).toBe(false);
     expect(core.ledger.get(held.id)?.status).toBe("committed");
+  });
+
+  it("block mode: a held call waits and resolves to the real downstream result on commit", async () => {
+    const core = new RecoilCore(config({ holdMode: "block" }), () => {});
+    await core.attach("mock", await mockDownstream());
+
+    const file = join(workDir, "out.txt");
+    writeFileSync(file, "before");
+
+    // delete is held; the call blocks. Commit it after a tick and the SAME
+    // call resolves with the downstream result ("deleted").
+    const pending = core.callTool("delete_file", { path: file });
+    await new Promise((r) => setTimeout(r, 20));
+    const held = core.ledger.all().find((a) => a.tool === "delete_file")!;
+    expect(held.status).toBe("held");
+    expect(existsSync(file)).toBe(true);
+
+    appendFileSync(join(config().dataDir, "commands.jsonl"), JSON.stringify({ op: "commit", id: held.id }) + "\n");
+    await core.pollCommands();
+
+    const result = await pending;
+    expect(result.content[0].text).toBe("deleted");
+    expect(existsSync(file)).toBe(false);
+    const committed = core.ledger.get(held.id)!;
+    expect(committed.status).toBe("committed");
+    expect(committed.delivered).toBe(true);
+  });
+
+  it("block mode: discarding a held call resolves it with a decline notice", async () => {
+    const core = new RecoilCore(config({ holdMode: "block" }), () => {});
+    await core.attach("mock", await mockDownstream());
+    const file = join(workDir, "keep.txt");
+    writeFileSync(file, "safe");
+
+    const pending = core.callTool("delete_file", { path: file });
+    await new Promise((r) => setTimeout(r, 20));
+    const held = core.ledger.all().find((a) => a.tool === "delete_file")!;
+    await core.callTool("recoil_undo", { id: held.id });
+
+    const result = await pending;
+    expect(result.content[0].text).toContain("declined");
+    expect(existsSync(file)).toBe(true);
+  });
+
+  it("async mode: recoil_status returns the real result after a human commits", async () => {
+    const core = new RecoilCore(config({ holdMode: "async" }), () => {});
+    await core.attach("mock", await mockDownstream());
+    const file = join(workDir, "async.txt");
+    writeFileSync(file, "v1");
+
+    // write is undoable, not held — it runs and returns the plain result
+    const write = await core.callTool("write_file", { path: file, content: "v2" });
+    expect(write.content[0].text).toBe("written");
+
+    const heldNotice = JSON.parse((await core.callTool("delete_file", { path: file })).content[0].text);
+    expect(heldNotice.recoil).toBe("held");
+    expect(existsSync(file)).toBe(true);
+
+    // before approval, status is pending
+    const pending = JSON.parse((await core.callTool("recoil_status", { id: heldNotice.id })).content[0].text);
+    expect(pending.recoil).toBe("pending");
+
+    appendFileSync(join(config().dataDir, "commands.jsonl"), JSON.stringify({ op: "commit", id: heldNotice.id }) + "\n");
+    await core.pollCommands();
+
+    // after approval, status returns the actual downstream result
+    const done = await core.callTool("recoil_status", { id: heldNotice.id });
+    expect(done.content[0].text).toBe("deleted");
+    expect(existsSync(file)).toBe(false);
   });
 
   it("discards a held action on undo, and finalizes expired actions on sweep", async () => {

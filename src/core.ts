@@ -60,12 +60,31 @@ export const CONTROL_TOOLS: Tool[] = [
       required: ["id"],
     },
   },
+  {
+    name: "recoil_status",
+    description:
+      "Check a held action and, once a human has approved it, retrieve the real result of running it. Call this after asking the user to approve a held action so you can continue the task with the outcome.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "Action id from recoil_ledger" } },
+      required: ["id"],
+    },
+  },
 ];
+
+/** Resolves a blocked tool call once its held action is committed or discarded. */
+type Waiter = (result: ToolResult) => void;
+
+export interface CallOptions {
+  /** Emit a progress keepalive while a blocked call waits for approval. */
+  sendProgress?: () => void;
+}
 
 export class RecoilCore {
   private clients = new Map<string, Client>();
   private tools = new Map<string, Routed>();
   private heldByFingerprint = new Map<string, string>();
+  private pending = new Map<string, Waiter[]>();
   readonly ledger: Ledger;
   private commandCursor = 0;
 
@@ -111,10 +130,11 @@ export class RecoilCore {
     return [...[...this.tools.values()].map((r) => r.definition), ...CONTROL_TOOLS];
   }
 
-  async callTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
+  async callTool(name: string, args: Record<string, unknown>, opts: CallOptions = {}): Promise<ToolResult> {
     if (name === "recoil_ledger") return this.handleLedger(args);
     if (name === "recoil_undo") return this.handleUndo(String(args.id ?? ""));
     if (name === "recoil_commit") return this.handleCommit(String(args.id ?? ""));
+    if (name === "recoil_status") return this.handleStatus(String(args.id ?? ""));
 
     const routed = this.tools.get(name);
     if (!routed) return errorText(`Unknown tool: ${name}`);
@@ -131,7 +151,7 @@ export class RecoilCore {
       status: "passed",
     };
 
-    if (tier === "hold") return this.hold(base);
+    if (tier === "hold") return this.hold(base, opts);
     if (tier === "pass") {
       this.ledger.record(base);
       return this.forward(routed, args, id);
@@ -143,7 +163,7 @@ export class RecoilCore {
     if (paths.length > 0) {
       const manifest = takeSnapshot(id, paths, join(this.config.dataDir, "snapshots"), this.config.maxSnapshotBytes);
       if (manifest === null) {
-        return this.hold({ ...base, note: "escalated: snapshot exceeds maxSnapshotBytes" });
+        return this.hold({ ...base, note: "escalated: snapshot exceeds maxSnapshotBytes" }, opts);
       }
       base.undo = manifest;
     }
@@ -152,11 +172,46 @@ export class RecoilCore {
     return this.forward(routed, args, id);
   }
 
+  /** Surface a log line (used by the control server). */
+  note(message: string): void {
+    this.log(message);
+  }
+
+  /** Read model for the web console: recent actions, richest fields included. */
+  snapshotLedger(limit = 200): Array<Record<string, unknown>> {
+    return this.ledger
+      .all()
+      .reverse()
+      .slice(0, limit)
+      .map(({ id, ts, server, tool, args, tier, status, note, delivered }) => {
+        const result = this.ledger.get(id)?.result as ToolResult | undefined;
+        return {
+          id,
+          ts,
+          server,
+          tool,
+          tier,
+          status,
+          note,
+          delivered,
+          args,
+          result: result?.content?.map((part) => part.text).join("\n"),
+          recoilable: status === "applied" || status === "committed",
+          actionable: status === "held",
+        };
+      });
+  }
+
+  /** Human commit/undo from the control UI — same path as the CLI command file. */
+  async applyCommand(op: "commit" | "undo", id: string): Promise<ToolResult> {
+    return op === "commit" ? this.commitHeld(id) : this.handleUndo(id);
+  }
+
   /** Finalize applied actions whose recoil window has elapsed. */
   sweep(now = Date.now()): void {
     for (const action of this.ledger.all()) {
       if (action.status === "applied" && now - Date.parse(action.ts) > this.config.commitWindowMs) {
-        this.ledger.transition(action.id, "final", "recoil window elapsed");
+        this.ledger.transition(action.id, "final", { note: "recoil window elapsed" });
       }
     }
   }
@@ -178,36 +233,86 @@ export class RecoilCore {
     const client = this.clients.get(routed.server)!;
     try {
       const result = (await client.callTool({ name: routed.tool, arguments: args })) as ToolResult;
-      if (result.isError) this.ledger.transition(id, "failed", "downstream returned error");
+      if (result.isError) this.ledger.transition(id, "failed", { note: "downstream returned error" });
       return result;
     } catch (error) {
-      this.ledger.transition(id, "failed", String(error));
+      this.ledger.transition(id, "failed", { note: String(error) });
       return errorText(`Downstream ${routed.server}/${routed.tool} failed: ${String(error)}`);
     }
   }
 
-  private hold(action: ActionRecord): ToolResult {
+  private hold(action: ActionRecord, opts: CallOptions): Promise<ToolResult> | ToolResult {
     const fingerprint = createHash("sha256")
       .update(JSON.stringify([action.server, action.tool, action.args]))
       .digest("hex");
     const existing = this.heldByFingerprint.get(fingerprint);
     if (existing && this.ledger.get(existing)?.status === "held") {
-      return text({
-        recoil: "held",
-        id: existing,
-        message: `Identical action is already held as ${existing}. Do not retry; a human must approve it.`,
-      });
+      // Identical retry: attach to the already-staged action rather than stack.
+      if (this.config.holdMode === "block") return this.waitForResolution(existing, action, opts);
+      return this.heldNotice(existing, action, "duplicate");
     }
     this.ledger.record({ ...action, status: "held" });
     this.heldByFingerprint.set(fingerprint, action.id);
+    if (this.config.holdMode === "block") return this.waitForResolution(action.id, action, opts);
+    return this.heldNotice(action.id, action);
+  }
+
+  /**
+   * Block the tool call until the held action is committed (resolving to the
+   * real downstream result) or discarded (resolving to a decline notice), so
+   * the outcome flows back into the LLM call. Falls back to an async notice if
+   * the optional hold timeout elapses first.
+   */
+  private waitForResolution(id: string, action: ActionRecord, opts: CallOptions): Promise<ToolResult> {
+    return new Promise<ToolResult>((resolve) => {
+      const ping = opts.sendProgress ? setInterval(opts.sendProgress, this.config.holdProgressMs) : undefined;
+      ping?.unref?.();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const settle: Waiter = (result) => {
+        if (ping) clearInterval(ping);
+        if (timer) clearTimeout(timer);
+        resolve(result);
+      };
+      const waiters = this.pending.get(id) ?? [];
+      waiters.push(settle);
+      this.pending.set(id, waiters);
+      if (this.config.holdTimeoutMs > 0) {
+        timer = setTimeout(() => {
+          const remaining = (this.pending.get(id) ?? []).filter((w) => w !== settle);
+          if (remaining.length) this.pending.set(id, remaining);
+          else this.pending.delete(id);
+          if (ping) clearInterval(ping);
+          resolve(this.heldNotice(id, action, "timeout"));
+        }, this.config.holdTimeoutMs);
+        timer.unref?.();
+      }
+    });
+  }
+
+  /** Deliver a result to any tool calls blocked on this action. */
+  private resolvePending(id: string, result: ToolResult): boolean {
+    const waiters = this.pending.get(id);
+    if (!waiters?.length) return false;
+    this.pending.delete(id);
+    for (const settle of waiters) settle(result);
+    return true;
+  }
+
+  private heldNotice(id: string, action: ActionRecord, reason?: "duplicate" | "timeout"): ToolResult {
+    const lead =
+      reason === "duplicate"
+        ? `Identical action is already staged as ${id}.`
+        : reason === "timeout"
+          ? `Action ${id} is still awaiting human approval.`
+          : `This action is consequential and was NOT executed. It is staged as ${id}.`;
     return text({
       recoil: "held",
-      id: action.id,
+      id,
       tool: `${action.server}/${action.tool}`,
       message:
-        `This action is consequential and was NOT executed. It is staged as ${action.id}. ` +
-        `Ask the user to approve it by running: recoil commit ${action.id} (or discard with: recoil undo ${action.id}). ` +
-        `Continue with the rest of the task; do not retry this call.`,
+        `${lead} Ask the user to approve it by running: recoil commit ${id} ` +
+        `(or discard with: recoil undo ${id}). Do NOT retry this call. ` +
+        `After the user approves, call recoil_status with id "${id}" to get the result and continue.`,
     });
   }
 
@@ -218,7 +323,13 @@ export class RecoilCore {
     const routed = [...this.tools.values()].find((r) => r.server === action.server && r.tool === action.tool);
     if (!routed) return errorText(`Tool ${action.server}/${action.tool} no longer available`);
     this.ledger.transition(id, "committed");
-    return this.forward(routed, action.args as Record<string, unknown>, id);
+    const result = await this.forward(routed, action.args as Record<string, unknown>, id);
+    // Capture the real result and hand it to any blocked call; status records
+    // it for async retrieval too. delivered=true means it already went inline.
+    const status = this.ledger.get(id)?.status === "failed" ? "failed" : "committed";
+    const delivered = this.resolvePending(id, result);
+    this.ledger.transition(id, status, { result, delivered });
+    return result;
   }
 
   private handleLedger(args: Record<string, unknown>): ToolResult {
@@ -235,7 +346,12 @@ export class RecoilCore {
     const action = this.ledger.get(id);
     if (!action) return errorText(`No action ${id}`);
     if (action.status === "held") {
-      this.ledger.transition(id, "discarded");
+      const declined = text(
+        `The user declined action ${id} (${action.server}/${action.tool}); it was not executed. ` +
+          `Do not retry; continue the task without it.`,
+      );
+      const delivered = this.resolvePending(id, declined);
+      this.ledger.transition(id, "discarded", { delivered });
       return text(`Held action ${id} discarded — it never ran.`);
     }
     if (action.status !== "applied" && action.status !== "committed") {
@@ -256,5 +372,21 @@ export class RecoilCore {
       );
     }
     return this.commitHeld(id);
+  }
+
+  /** Async feedback path: hand the committed action's real result to the agent. */
+  private handleStatus(id: string): ToolResult {
+    const action = this.ledger.get(id);
+    if (!action) return errorText(`No action ${id}`);
+    if (action.status === "held") {
+      return text({ recoil: "pending", id, message: `Action ${id} is still awaiting human approval. Check again shortly.` });
+    }
+    if (action.status === "discarded") {
+      return text({ recoil: "discarded", id, message: `The user declined action ${id}; it was not executed. Do not retry.` });
+    }
+    if ((action.status === "committed" || action.status === "failed") && action.result !== undefined) {
+      return action.result as ToolResult; // the real downstream outcome, fed back to the LLM
+    }
+    return text({ recoil: action.status, id, message: `Action ${id} is ${action.status}.` });
   }
 }

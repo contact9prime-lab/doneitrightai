@@ -20,6 +20,14 @@ export interface PolicyRule {
   tier: Tier;
 }
 
+/**
+ * `block`: a held tool call waits and resolves to the real downstream result
+ * once a human commits — so the outcome flows straight back into the LLM call.
+ * `async`: a held call returns a notice immediately; the agent retrieves the
+ * result later via recoil_status (for hosts that can't hold a call open).
+ */
+export type HoldMode = "block" | "async";
+
 export interface RecoilConfig {
   servers: Record<string, ServerSpec>;
   rules: PolicyRule[];
@@ -28,6 +36,14 @@ export interface RecoilConfig {
   allowAgentCommit: boolean;
   maxSnapshotBytes: number;
   dataDir: string;
+  holdMode: HoldMode;
+  /** In block mode, give up waiting after this many ms (0 = wait indefinitely). */
+  holdTimeoutMs: number;
+  /** In block mode, emit a progress keepalive this often while waiting. */
+  holdProgressMs: number;
+  /** Web console port (0 = off). Bound to loopback. */
+  controlPort: number;
+  controlHost: string;
 }
 
 export const DEFAULTS = {
@@ -37,6 +53,11 @@ export const DEFAULTS = {
   allowAgentCommit: false,
   maxSnapshotBytes: 50 * 1024 * 1024,
   dataDir: ".recoil",
+  holdMode: "block" as HoldMode,
+  holdTimeoutMs: 0,
+  holdProgressMs: 10 * 1000,
+  controlPort: 7777,
+  controlHost: "127.0.0.1",
 };
 
 export function loadConfig(path: string): RecoilConfig {
@@ -58,6 +79,9 @@ export function loadConfig(path: string): RecoilConfig {
   if (raw.defaultTier && !tiers.includes(raw.defaultTier)) {
     throw new Error(`${path}: defaultTier must be pass|undoable|hold`);
   }
+  if (raw.holdMode && raw.holdMode !== "block" && raw.holdMode !== "async") {
+    throw new Error(`${path}: holdMode must be block|async`);
+  }
   return {
     servers: raw.servers,
     rules: raw.rules ?? DEFAULTS.rules,
@@ -66,5 +90,10 @@ export function loadConfig(path: string): RecoilConfig {
     allowAgentCommit: raw.allowAgentCommit ?? DEFAULTS.allowAgentCommit,
     maxSnapshotBytes: raw.maxSnapshotBytes ?? DEFAULTS.maxSnapshotBytes,
     dataDir: resolve(raw.dataDir ?? DEFAULTS.dataDir),
+    holdMode: raw.holdMode ?? DEFAULTS.holdMode,
+    holdTimeoutMs: raw.holdTimeoutMs ?? DEFAULTS.holdTimeoutMs,
+    holdProgressMs: raw.holdProgressMs ?? DEFAULTS.holdProgressMs,
+    controlPort: raw.controlPort ?? DEFAULTS.controlPort,
+    controlHost: raw.controlHost ?? DEFAULTS.controlHost,
   };
 }

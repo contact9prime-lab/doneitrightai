@@ -18,5 +18,8 @@ COPY --from=build /app/dist ./dist
 VOLUME /data
 ENV RECOIL_DATA_DIR=/data/.recoil
 
+# Web console (set "controlHost": "0.0.0.0" in config to reach it from the host).
+EXPOSE 7777
+
 ENTRYPOINT ["node", "dist/index.js"]
 CMD ["/data/recoil.config.json"]

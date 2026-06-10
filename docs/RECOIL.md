@@ -65,6 +65,48 @@ Two honesty rules with teeth:
   refused by default; commits arrive from the human CLI through the data
   dir (file-based IPC the proxy polls every second).
 
+## Approval feeds back into the agent
+
+A held action is useless if the agent never learns the outcome. Recoil closes
+that loop two ways, set by `holdMode`:
+
+- **`block` (default).** The held tool call *waits*. Recoil emits MCP progress
+  notifications as keepalive while it waits; when the human commits, the real
+  downstream result (the sent confirmation, the query rows) resolves that same
+  tool call — so the outcome flows straight back into the LLM call, exactly as
+  if the tool had simply been slow. A discard resolves it with a decline
+  notice ("the user declined; do not retry"). Requires a host that tolerates
+  long tool calls (raise the request timeout or honor `resetTimeoutOnProgress`);
+  `holdTimeoutMs` degrades a too-long wait to the async path.
+- **`async`.** The held call returns a notice immediately; after the human
+  approves, the agent calls `recoil_status <id>` to retrieve the real result
+  and continue. For hosts that can't hold a call open. The held notice tells
+  the agent to do exactly this.
+
+Either way the agent ends up with the genuine result of the committed action,
+never a dangling "I asked the human." The result is also recorded in the
+ledger (`result`, `delivered`) so the web console and `recoil_status` can show
+it after the fact.
+
+## The web console
+
+Set `controlPort` (default 7777, loopback-only) and Recoil serves a live
+dashboard at `http://127.0.0.1:7777`:
+
+- **Awaiting your approval** — held actions as cards with their arguments and
+  **Approve & run** / **Discard** buttons. Approving runs the downstream call
+  and (in block mode) unblocks the waiting agent.
+- **Recoilable** — applied/committed actions still inside the window, each
+  with a **Recoil** button.
+- **Audit ledger** — every action, tier, status, and result, refreshing every
+  two seconds.
+
+It is the same commit/undo path as the CLI, over a tiny HTTP API
+(`GET /api/ledger`, `POST /api/commit`, `POST /api/undo`). Bound to loopback
+because approving an agent's destructive action is privileged; expose it only
+behind your own auth. In Docker, set `"controlHost": "0.0.0.0"` and publish
+`-p 7777:7777` to reach it from the host.
+
 ## The ledger
 
 Append-only JSONL at `.recoil/ledger.jsonl` — the audit half of "audits and
