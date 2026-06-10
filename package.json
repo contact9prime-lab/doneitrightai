@@ -1,0 +1,30 @@
+{
+  "name": "recoil-mcp",
+  "version": "0.1.0",
+  "description": "Recoil MCP — the undo layer for AI agents. A proxy that audits every MCP tool call and can recoil what agents did: reads pass, writes are snapshotted and undoable, destructive actions are held until a human commits.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "recoil": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

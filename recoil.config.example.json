@@ -1,0 +1,23 @@
+{
+  "servers": {
+    "fs": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/workspace"]
+    },
+    "gh": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..." },
+      "profile": "github"
+    }
+  },
+  "rules": [
+    { "match": "move*", "tier": "hold" },
+    { "match": "write_scratch*", "tier": "pass" }
+  ],
+  "defaultTier": "undoable",
+  "commitWindowMs": 1800000,
+  "allowAgentCommit": false,
+  "maxSnapshotBytes": 52428800,
+  "dataDir": ".recoil"
+}
