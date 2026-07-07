@@ -1,4 +1,15 @@
-node_modules/
-dist/
-.recoil/
+# TrainForge runtime state — everything the platform writes lives here
+data/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# recoil-mcp (Node project kept aside)
+recoil-mcp/node_modules/
+recoil-mcp/dist/
+recoil-mcp/.recoil/
+
 *.log
+.DS_Store

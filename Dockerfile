@@ -1,22 +1,25 @@
-# Build stage: compile TypeScript with dev dependencies
-FROM node:22-slim AS build
-WORKDIR /app
-COPY package.json package-lock.json tsconfig.json ./
-COPY src ./src
-RUN npm ci && npm run build
+# TrainForge container image.
+#
+# Default build is CPU-only (small, fast). For GPU training pass
+# WITH_GPU=1 and run with the NVIDIA Container Toolkit — see
+# docker-compose.gpu.yml.
 
-# Runtime stage: production dependencies only
-FROM node:22-slim
-WORKDIR /app
-ENV NODE_ENV=production
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
-COPY --from=build /app/dist ./dist
+FROM python:3.11-slim
 
-# /data holds the config, the ledger, and snapshots — mount it from the host
-# so the audit trail and recovery state outlive the container.
+WORKDIR /app
+
+# Layer-cache the dependency install: requirements change rarely.
+COPY requirements.txt requirements-gpu.txt ./
+ARG WITH_GPU=0
+RUN pip install --no-cache-dir -r requirements.txt \
+ && if [ "$WITH_GPU" = "1" ]; then pip install --no-cache-dir -r requirements-gpu.txt; fi
+
+COPY server/ server/
+COPY ui/ ui/
+
+# All mutable state lives here — mount a volume to persist it.
+ENV TRAINFORGE_DATA_DIR=/data
 VOLUME /data
-ENV RECOIL_DATA_DIR=/data/.recoil
 
-ENTRYPOINT ["node", "dist/index.js"]
-CMD ["/data/recoil.config.json"]
+EXPOSE 8000
+CMD ["uvicorn", "server.main:app", "--host", "0.0.0.0", "--port", "8000"]

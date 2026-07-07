@@ -1,0 +1,17 @@
+# GPU overlay — requires the NVIDIA Container Toolkit on the host
+# (https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+services:
+  trainforge:
+    build:
+      context: .
+      args:
+        WITH_GPU: "1"      # install torch/transformers/peft into the image
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

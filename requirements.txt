@@ -1,0 +1,21 @@
+# TrainForge core requirements (CPU-friendly).
+#
+# These are enough to run the server, the web UI, dataset ingestion from
+# public sources, tabular training (scikit-learn), and publishing to the
+# Hugging Face Hub.
+#
+# For GPU deep-learning tasks (text-classification, causal-lm) also install
+# requirements-gpu.txt.
+
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+python-multipart>=0.0.9      # file uploads
+requests>=2.31
+pandas>=2.1
+pyarrow>=15.0                # parquet storage for all imported datasets
+scikit-learn>=1.4            # tabular training (works without a GPU)
+joblib>=1.3                  # tabular model serialization
+huggingface_hub>=0.23        # search public datasets + publish models
+datasets>=2.19               # import datasets from the Hugging Face Hub
+openpyxl>=3.1                # read uploaded Excel (.xlsx/.xls) files
