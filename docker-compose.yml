@@ -1,0 +1,18 @@
+# TrainForge — CPU deployment.
+#   docker compose up --build
+# For GPU, layer on docker-compose.gpu.yml (see that file).
+services:
+  trainforge:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - trainforge-data:/data
+    environment:
+      # Pass through if set on the host; blank is fine.
+      - HF_TOKEN=${HF_TOKEN:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    restart: unless-stopped
+
+volumes:
+  trainforge-data:

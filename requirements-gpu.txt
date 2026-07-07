@@ -1,0 +1,15 @@
+# TrainForge deep-learning requirements.
+#
+# Install these (in addition to requirements.txt) to enable the GPU-backed
+# training tasks: text-classification and causal-lm (LoRA fine-tuning).
+#
+# torch is installed from the default PyPI index, which ships CUDA wheels on
+# Linux. If you need a specific CUDA version, follow
+# https://pytorch.org/get-started/locally/ and then install the rest.
+
+torch>=2.2
+transformers>=4.40
+accelerate>=0.29             # device placement + mixed precision for Trainer
+peft>=0.10                   # LoRA adapters for causal-lm fine-tuning
+sentencepiece>=0.1.99        # tokenizers for Llama/T5-style models
+safetensors>=0.4

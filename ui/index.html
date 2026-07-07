@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<!--
+  TrainForge web UI — a zero-build single-page app.
+
+  There is deliberately no bundler, framework, or CDN dependency: this file
+  plus styles.css and app.js are served as-is by the FastAPI server and work
+  fully offline. All rendering happens in app.js against the JSON API
+  (see docs/api.md); this file only provides the shell.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TrainForge</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚒️</text></svg>">
+</head>
+<body>
+  <header>
+    <div class="logo">⚒️ Train<span>Forge</span></div>
+    <nav id="nav">
+      <a href="#/autopilot">Autopilot</a>
+      <a href="#/datasets">Datasets</a>
+      <a href="#/train">Train</a>
+      <a href="#/jobs">Jobs</a>
+      <a href="#/models">Models</a>
+    </nav>
+    <!-- Live GPU / capability chips, filled by app.js from /api/system/info -->
+    <div class="sys-chips" id="sys-chips"></div>
+  </header>
+
+  <main id="view"><!-- app.js renders the active route here --></main>
+
+  <div id="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>
